@@ -1,8 +1,9 @@
-import { ArrowLeft, Mail, Phone, Calendar, DollarSign, Building2, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Mail, Phone, Calendar, Building2, User, Loader2, CreditCard, FileText, MapPin, Briefcase } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { mockEmployees } from '../data/mockData';
+import { fetchEmployeeWithContract, Employee, Contract } from '../services/employeeService';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 
 interface EmployeeDetailPageProps {
@@ -11,175 +12,198 @@ interface EmployeeDetailPageProps {
 }
 
 export function EmployeeDetailPage({ employeeId, onBack }: EmployeeDetailPageProps) {
-  const employee = mockEmployees.find(e => e.id === employeeId);
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!employee) {
+  useEffect(() => {
+    const loadEmployee = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const { employee, contract } = await fetchEmployeeWithContract(employeeId);
+        setEmployee(employee);
+        setContract(contract);
+      } catch (err) {
+        setError('Failed to load employee details.');
+        console.error('Error loading employee:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadEmployee();
+  }, [employeeId]);
+
+  if (isLoading) {
     return (
-      <div className="p-6">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Employees
-        </Button>
-        <p className="text-muted-foreground">Employee not found</p>
+      <div className="h-full flex flex-col items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary opacity-50" />
+        <span className="mt-4 text-muted-foreground animate-pulse">Retrieving employee data...</span>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-8 mb-6">
+          <h3 className="text-xl font-semibold text-destructive mb-2">Error Loading Profile</h3>
+          <p className="text-muted-foreground">{error}</p>
+        </div>
+        <Button onClick={onBack} size="lg">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Return to Dashboard
+        </Button>
+      </div>
+    );
+  }
+
+  if (!employee) return null;
+
+  const DetailItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | null | undefined }) => {
+    if (!value) return null;
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+          <p className="text-sm font-medium truncate">{value}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      <Button variant="ghost" onClick={onBack}>
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Employees
-      </Button>
+    <div className="flex flex-col h-full bg-background/50">
+      {/* Header Section */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40 p-4 md:px-8 flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-accent">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-lg font-semibold">Employee Profile</h1>
+          <p className="text-sm text-muted-foreground">Manage employee details</p>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Card */}
-        <Card className="lg:col-span-1">
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-24 w-24">
-                <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
-                  {employee.firstName[0]}{employee.lastName[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div className="text-center space-y-1">
-                <h2>{employee.firstName} {employee.lastName}</h2>
-                <p className="text-muted-foreground">{employee.position}</p>
-                <Badge
-                  variant={employee.status === 'Active' ? 'default' : 'secondary'}
-                  className={
-                    employee.status === 'Active'
-                      ? 'bg-success/10 text-success hover:bg-success/20'
-                      : employee.status === 'On Leave'
-                      ? 'bg-warning/10 text-warning hover:bg-warning/20'
-                      : ''
-                  }
-                >
-                  {employee.status}
-                </Badge>
+      <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-8">
+          
+          {/* Main Profile Card */}
+          <Card className="border-none shadow-md overflow-hidden bg-gradient-to-br from-card to-accent/10">
+            <CardContent className="p-0">
+              <div className="flex flex-col md:flex-row">
+                <div className="p-8 flex flex-col items-center justify-center md:items-start md:w-80 border-b md:border-b-0 md:border-r border-border/50 bg-card/50">
+                   <Avatar className="h-32 w-32 border-4 border-background shadow-xl mb-4">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-4xl">
+                      {employee.fullName?.[0] || 'E'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <h2 className="text-2xl font-bold text-center md:text-left">{employee.fullName}</h2>
+                  <Badge variant="outline" className="mt-2 mb-4 bg-primary/5 text-primary border-primary/20">
+                    {employee.specialization || 'Employee'}
+                  </Badge>
+                  <div className="w-full space-y-2">
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span>{employee.department}</span>
+                     </div>
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        <span className="truncate">{employee.address}</span>
+                     </div>
+                  </div>
+                </div>
+                
+                <div className="flex-1 p-8">
+                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                    <User className="h-5 w-5 text-primary" />
+                    Key Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <DetailItem icon={Mail} label="Email" value={employee.email} />
+                    <DetailItem icon={Phone} label="Phone" value={employee.phone} />
+                    <DetailItem icon={Calendar} label="Start Date" value={new Date(employee.dateIn).toLocaleDateString()} />
+                    <DetailItem icon={User} label="Gender" value={employee.gender} />
+                    <DetailItem icon={User} label="Marital Status" value={employee.maritalStatus} />
+                    <DetailItem icon={Calendar} label="Birthday" value={new Date(employee.birthday).toLocaleDateString()} />
+                  </div>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column: Contract & Status */}
+            <div className="lg:col-span-2 space-y-8">
+              <Card className="shadow-sm border-border/60">
+                <CardHeader className="border-b border-border/40 bg-accent/5">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Employment Contract
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                   {contract ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                         <DetailItem icon={FileText} label="Contract No" value={contract.contractNo} />
+                         <DetailItem icon={Calendar} label="Start Date" value={new Date(contract.startDate).toLocaleDateString()} />
+                      </div>
+                      <div className="space-y-4">
+                         <DetailItem icon={FileText} label="Type & Duration" value={`${contract.durationValue} ${contract.durationType}`} />
+                         <DetailItem icon={Calendar} label="End Date" value={new Date(contract.endDate).toLocaleDateString()} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed border-border/50 rounded-lg">
+                      <FileText className="h-12 w-12 mb-3 opacity-20" />
+                      <p>No active contract found.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-border/60">
+                 <CardHeader className="border-b border-border/40 bg-accent/5">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                    Professional & Skills
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <DetailItem icon={Briefcase} label="Specialization" value={employee.specialization} />
+                      <DetailItem icon={Briefcase} label="Department" value={employee.department} />
+                   </div>
+                </CardContent>
+              </Card>
             </div>
 
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">{employee.email}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">{employee.phone}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">{employee.department}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-foreground">
-                  Joined {new Date(employee.dateJoined).toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
-                </span>
-              </div>
-              {employee.manager && (
-                <div className="flex items-center gap-3 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-foreground">Reports to {employee.manager}</span>
-                </div>
-              )}
+            {/* Right Column: Financial & Other */}
+            <div className="space-y-8">
+              <Card className="h-full shadow-sm border-border/60">
+                <CardHeader className="border-b border-border/40 bg-accent/5">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Financial & Legal
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-2">
+                   <DetailItem icon={CreditCard} label="Bank Account" value={employee.bankAccount} />
+                   <DetailItem icon={Building2} label="Bank Name" value={employee.bank} />
+                   <DetailItem icon={FileText} label="SIN" value={employee.sin} />
+                   <DetailItem icon={FileText} label="PTIN" value={employee.ptin} />
+                   <DetailItem icon={CreditCard} label="National ID" value={employee.nationalId} />
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Details Cards */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Employment Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Employee ID</p>
-                  <p>EMP-{employee.id.padStart(5, '0')}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Position</p>
-                  <p>{employee.position}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Department</p>
-                  <p>{employee.department}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Employment Status</p>
-                  <p>{employee.status}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Start Date</p>
-                  <p>{new Date(employee.dateJoined).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Tenure</p>
-                  <p>
-                    {Math.floor((new Date().getTime() - new Date(employee.dateJoined).getTime()) / (1000 * 60 * 60 * 24 * 365))} years
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Compensation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 bg-success/10 rounded-lg flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Annual Salary</p>
-                  <p className="text-2xl">
-                    ${employee.salary.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance & History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b border-border">
-                  <div>
-                    <p>Annual Review 2025</p>
-                    <p className="text-sm text-muted-foreground">Completed on Dec 15, 2025</p>
-                  </div>
-                  <Badge className="bg-success/10 text-success hover:bg-success/20">Excellent</Badge>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-border">
-                  <div>
-                    <p>Promotion</p>
-                    <p className="text-sm text-muted-foreground">June 2024</p>
-                  </div>
-                  <Badge variant="secondary">Senior Level</Badge>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <div>
-                    <p>Training Completed</p>
-                    <p className="text-sm text-muted-foreground">Leadership Course - March 2024</p>
-                  </div>
-                  <Badge variant="outline">Certificate</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
