@@ -9,25 +9,23 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'employees' as const, label: 'Employees', icon: Users },
-  { id: 'departments' as const, label: 'Departments', icon: Building2 },
-  { id: 'users' as const, label: 'Users & Roles', icon: UserCog },
+  { id: 'dashboard' as const, label: 'Thống kê', icon: LayoutDashboard },
+  { id: 'employees' as const, label: 'Nhân viên', icon: Users },
+  { id: 'departments' as const, label: 'Phòng ban', icon: Building2 },
 ];
 
-const bottomItems = [
-  { id: 'profile' as const, label: 'Profile', icon: User },
-];
+const bottomItems: any[] = [];
+
 
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   return (
-    <div className="w-64 bg-card border-r border-border flex flex-col">
+    <div className="w-42 bg-card border-r border-border flex flex-col">
       <div className="h-16 border-b border-border flex items-center px-6">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground">HR</span>
+            <span className="text-primary-foreground">F</span>
           </div>
-          <span className="text-lg">HR Portal</span>
+          <span className="text-lg">Farmila</span>
         </div>
       </div>
 

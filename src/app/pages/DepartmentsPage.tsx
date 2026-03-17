@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Plus, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react';
-import { mockDepartments, Department } from '../data/mockData';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Plus, MoreHorizontal, Pencil, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { useDepartment, Department } from '../hooks/useDepartment';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { toast } from 'sonner';
+import { Toaster } from '../components/ui/sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,56 +21,64 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
 
 export function DepartmentsPage() {
-  const [departments, setDepartments] = useState<Department[]>(mockDepartments);
+  const { departments, loading, error, createDepartment, updateDepartment, deleteDepartment } = useDepartment();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
-  const [formData, setFormData] = useState<Partial<Department>>({});
+  const [name, setName] = useState('');
 
-  const handleAdd = () => {
-    if (!formData.name || !formData.manager) return;
-    
-    const newDepartment: Department = {
-      id: (departments.length + 1).toString(),
-      name: formData.name,
-      manager: formData.manager,
-      employeeCount: 0,
-      description: formData.description || '',
-    };
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
 
-    setDepartments([...departments, newDepartment]);
-    setIsAddDialogOpen(false);
-    setFormData({});
+  const handleAdd = async () => {
+    if (!name) return;
+    try {
+        await createDepartment(name);
+        setIsAddDialogOpen(false);
+        setName('');
+        toast.success('Tạo phòng ban thành công');
+    } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || 'Tạo phòng ban thất bại');
+    }
   };
 
-  const handleEdit = () => {
-    if (!selectedDepartment) return;
-    
-    setDepartments(departments.map(dept =>
-      dept.id === selectedDepartment.id
-        ? { ...dept, ...formData }
-        : dept
-    ));
-    setIsEditDialogOpen(false);
-    setSelectedDepartment(null);
-    setFormData({});
+  const handleEdit = async () => {
+    if (!selectedDepartment || !name) return;
+    try {
+        await updateDepartment(selectedDepartment.id, name);
+        setIsEditDialogOpen(false);
+        setSelectedDepartment(null);
+        setName('');
+        toast.success('Cập nhật phòng ban thành công');
+    } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || 'Cập nhật phòng ban thất bại');
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selectedDepartment) return;
-    
-    setDepartments(departments.filter(dept => dept.id !== selectedDepartment.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedDepartment(null);
+    try {
+        await deleteDepartment(selectedDepartment.id);
+        setIsDeleteDialogOpen(false);
+        setSelectedDepartment(null);
+        toast.success('Xóa phòng ban thành công');
+    } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || 'Xóa phòng ban thất bại');
+    }
   };
 
   const openEditDialog = (department: Department) => {
     setSelectedDepartment(department);
-    setFormData(department);
+    setName(department.name);
     setIsEditDialogOpen(true);
   };
 
@@ -81,113 +91,102 @@ export function DepartmentsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1>Departments</h1>
+          <h1 className="text-2xl font-bold">Phòng ban</h1>
           <p className="text-muted-foreground">
-            Manage organizational departments
+            Quản lý các phòng ban trong tổ chức
           </p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Department
+          <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+          Thêm phòng ban
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {departments.map((department) => (
-          <Card key={department.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle>{department.name}</CardTitle>
-                  <CardDescription className="mt-1.5">
-                    {department.description}
-                  </CardDescription>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-12 text-destructive">
+            <AlertCircle className="h-12 w-12 mb-4" />
+            <p className="font-medium">Lỗi khi tải danh sách phòng ban</p>
+            <p className="text-sm opacity-80">{error}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {departments && departments.length > 0 ? (
+                departments.map((department) => (
+                    <Card key={department.id} className="hover:shadow-md transition-shadow">
+                        <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg">{department.name}</CardTitle>
+                            <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(department)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Chỉnh sửa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                onClick={() => openDeleteDialog(department)}
+                                className="text-destructive font-medium"
+                                >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Xóa
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                        </CardHeader>
+                    </Card>
+                ))
+            ) : (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 bg-muted/30 rounded-lg border border-dashed">
+                    <p className="text-muted-foreground">Không tìm thấy phòng ban nào. Hãy tạo mới để bắt đầu.</p>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => openEditDialog(department)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => openDeleteDialog(department)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Manager</span>
-                  <span className="text-sm">{department.manager}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Employees</span>
-                  <div className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm">{department.employeeCount}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            )}
+        </div>
+      )}
 
       {/* Add Department Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Department</DialogTitle>
+            <DialogTitle>Thêm phòng ban mới</DialogTitle>
             <DialogDescription>
-              Create a new department in your organization
+              Tạo một phòng ban mới trong tổ chức của bạn
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Department Name</Label>
+              <Label htmlFor="name">Tên phòng ban</Label>
               <Input
                 id="name"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-input-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="manager">Manager</Label>
-              <Input
-                id="manager"
-                value={formData.manager || ''}
-                onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                className="bg-input-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="bg-input-background"
-                rows={3}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Marketing, Kỹ thuật, v.v."
+                autoFocus
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
+              Hủy
             </Button>
-            <Button onClick={handleAdd}>Add Department</Button>
+            <Button onClick={handleAdd} disabled={!name || loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Đang thêm...
+                </>
+              ) : (
+                'Thêm phòng ban'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -196,46 +195,26 @@ export function DepartmentsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Department</DialogTitle>
+            <DialogTitle>Chỉnh sửa phòng ban</DialogTitle>
             <DialogDescription>
-              Update department details
+              Cập nhật thông tin phòng ban
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Department Name</Label>
+              <Label htmlFor="edit-name">Tên phòng ban</Label>
               <Input
                 id="edit-name"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-input-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-manager">Manager</Label>
-              <Input
-                id="edit-manager"
-                value={formData.manager || ''}
-                onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                className="bg-input-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="bg-input-background"
-                rows={3}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
+              Hủy
             </Button>
-            <Button onClick={handleEdit}>Save Changes</Button>
+            <Button onClick={handleEdit} disabled={!name || loading}>Lưu thay đổi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -244,21 +223,22 @@ export function DepartmentsPage() {
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Department</DialogTitle>
+            <DialogTitle>Xóa phòng ban</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the {selectedDepartment?.name} department? This action cannot be undone.
+              Bạn có chắc chắn muốn xóa phòng ban {selectedDepartment?.name}? Hành động này không thể hoàn tác.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
+              Hủy
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete
+            <Button variant="destructive" onClick={handleDelete} disabled={loading}>
+              Xóa
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Toaster />
     </div>
   );
 }

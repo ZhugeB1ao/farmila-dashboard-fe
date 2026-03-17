@@ -1,45 +1,31 @@
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Users, Building2, TrendingUp, UserCheck, Loader2 } from 'lucide-react';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchEmployees, Employee } from '../services/employeeService';
+import { Users, Building2, UserCheck, Loader2 } from 'lucide-react';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useEmployee } from '../hooks/useEmployee';
 
 export function DashboardPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { employees, loading } = useEmployee();
 
-  useEffect(() => {
-    const loadEmployees = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchEmployees();
-        setEmployees(data);
-      } catch (err) {
-        console.error('Error loading employees:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
-    loadEmployees();
-  }, []);
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center min-h-[400px]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+    );
+  }
 
-  const totalEmployees = employees.length;
-  const activeEmployees = employees.filter(e => !e.dateIn).length; // Assuming no separate status field, or map DateIn logic? Wait, ApiEmployee doesn't have status. Let's assume all are active for now or check logic.
-  // Actually, checking the Employee interface, there is no 'status' field. 
-  // The original code used `e.status === 'Active'` which implies the interface might have had it or it was assumed. 
-  // Let's re-examine Employee interface in previous turns. 
-  // ... It does NOT have status. 
-  // I will assume for now that all employees fetched are "Active" unless we have a way to determine. 
-  // Or I can calculate "New Joiners" based on DateIn.
+  const employeeList = employees || [];
+  const activeEmployees = employeeList.filter(emp => emp.status !== 'Inactive');
+  const totalEmployees = activeEmployees.length;
   
-  // Let's implement dynamic Department Data
+  // Calculate stats from real data (active only for department charts)
   const departmentCounts: Record<string, number> = {};
-  employees.forEach(emp => {
-    const dept = emp.department || 'Unassigned';
+  activeEmployees.forEach(emp => {
+    const dept = emp.departmentName || 'Chưa phân loại';
     departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
   });
-
+  
   const departmentData = Object.entries(departmentCounts).map(([name, count]) => ({
     name,
     employees: count
@@ -47,19 +33,13 @@ export function DashboardPage() {
 
   const totalDepartments = Object.keys(departmentCounts).length;
 
-  // Status Distribution - Since we don't have a status field, let's mock this part or remove it.
-  // Or better, let's derive it from something else if possible. 
-  // If no status, maybe we can't show "Active/Inactive". 
-  // Let's show "Gender Distribution" instead as it is available? Or just keep it simple.
-  // The user want to remove hardcoded data. 
-  // I will change "Employee Status Distribution" to "Gender Distribution" as it is real data.
-  const genderCounts: Record<string, number> = {};
-  employees.forEach(emp => {
-    const gender = emp.gender || 'Unknown';
-    genderCounts[gender] = (genderCounts[gender] || 0) + 1;
+  const statusCounts: Record<string, number> = {};
+  employeeList.forEach(emp => {
+    const status = emp.status || 'Không xác định';
+    statusCounts[status] = (statusCounts[status] || 0) + 1;
   });
   
-  const statusData = Object.entries(genderCounts).map(([name, value]) => ({
+  const statusData = Object.entries(statusCounts).map(([name, value]) => ({
     name, 
     value
   }));
@@ -68,52 +48,42 @@ export function DashboardPage() {
 
   const stats = [
     {
-      title: 'Total Employees',
+      title: 'Tổng số nhân viên',
       value: totalEmployees.toString(),
       icon: Users,
-      trend: 'Total Count',
-      trendUp: true
+      trend: 'Đang làm việc',
     },
     {
-      title: 'Active Departments',
+      title: 'Phòng ban hoạt động',
       value: totalDepartments.toString(),
       icon: Building2,
-      trend: 'Across Org',
-      trendUp: true
+      trend: 'Toàn tổ chức',
     },
     {
-      title: 'New Joiners (This Month)',
-      value: employees.filter(e => {
-        if (!e.dateIn) return false;
-        const date = new Date(e.dateIn);
-        const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-      }).length.toString(),
+      title: 'Nhân viên đang làm việc',
+      value: activeEmployees.filter(e => e.status === 'Active').length.toString(),
       icon: UserCheck,
-      trend: 'Growth',
-      trendUp: true
+      trend: 'Trạng thái Active',
     },
     {
-      title: 'Avg. Team Size',
+      title: 'Quy mô nhóm TB',
       value: totalDepartments ? Math.round(totalEmployees / totalDepartments).toString() : '0',
       icon: Users,
-      trend: 'Per Dept',
-      trendUp: true
+      trend: 'Mỗi phòng ban',
     }
   ];
 
-  // Recent Activity - Derived from latest DateIn
-  // Sort employees by dateIn descending
-  const recentJoiners = [...employees]
-    .sort((a, b) => new Date(b.dateIn).getTime() - new Date(a.dateIn).getTime())
+  const recentJoiners = [...employeeList]
+    .sort((a, b) => new Date(b.dateJoined || 0).getTime() - new Date(a.dateJoined || 0).getTime())
     .slice(0, 5);
+
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1>Dashboard</h1>
+        <h1>Thống kê</h1>
         <p className="text-muted-foreground">
-          Real-time overview of your organization.
+          Tổng quan thời gian thực về tổ chức của bạn.
         </p>
       </div>
 
@@ -143,16 +113,20 @@ export function DashboardPage() {
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Employees by Department</CardTitle>
+            <CardTitle>Nhân viên theo phòng ban</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={departmentData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" stroke="#64748b" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#64748b" 
+                  tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 12)}...` : value}
+                />
                 <YAxis stroke="#64748b" />
                 <Tooltip 
                   contentStyle={{ 
@@ -167,44 +141,79 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Employee Gender Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#ffffff', 
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '0.5rem'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+          <Card className="lg:col-span-6">
+            <CardHeader>
+              <CardTitle>Tỷ lệ nhân viên theo phòng ban</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={departmentData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="employees"
+                  >
+                    {departmentData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#ffffff', 
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '0.5rem'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-4">
+            <CardHeader>
+              <CardTitle>Phân bổ nhân viên theo trạng thái</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value }) => `${name}: ${value}`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#ffffff', 
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '0.5rem'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Recent Activity */}
       <Card>
         <CardHeader>
-          <CardTitle>Newest Employees</CardTitle>
+          <CardTitle>Nhân viên mới nhất</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -216,14 +225,15 @@ export function DashboardPage() {
                       <Users className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <p><span className="font-medium">{emp.fullName}</span> joined as {emp.specialization || 'Employee'}</p>
-                      <p className="text-sm text-muted-foreground">Joined {new Date(emp.dateIn).toLocaleDateString()}</p>
+                      <p><span className="font-medium">{emp.firstName} {emp.lastName}</span> đã tham gia với vị trí {emp.specialization || 'Nhân viên'}</p>
+                      <p className="text-sm text-muted-foreground">Đã tham gia {emp.dateJoined ? new Date(emp.dateJoined).toLocaleDateString('vi-VN') : 'N/A'}</p>
                     </div>
+
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-muted-foreground text-sm">No recent activity.</p>
+              <p className="text-muted-foreground text-sm">Không có hoạt động gần đây.</p>
             )}
           </div>
         </CardContent>

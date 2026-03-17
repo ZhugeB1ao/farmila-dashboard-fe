@@ -3,53 +3,61 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { EmployeesPage } from './pages/EmployeesPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
-import { UsersRolesPage } from './pages/UsersRolesPage';
-import { ProfilePage } from './pages/ProfilePage';
+
 import { TopNav } from './components/layout/TopNav';
 import { Sidebar, PageType } from './components/layout/Sidebar';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 type ViewType = PageType | 'login';
 
-// HR Management Dashboard Application
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<ViewType>('login');
-
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    setCurrentView('dashboard');
-  };
+function AppContent() {
+  const { user, logOut, isLoading } = useAuth();
+  const [currentView, setCurrentView] = useState<PageType>('dashboard');
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentView('login');
+    logOut();
   };
 
   const handleNavigate = (page: PageType) => {
     setCurrentView(page);
   };
 
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
   }
 
   return (
     <div className="flex h-screen bg-background">
       <Sidebar
-        currentPage={currentView as PageType}
+        currentPage={currentView}
         onNavigate={handleNavigate}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopNav onLogout={handleLogout} userName="Admin User" />
+        <TopNav onLogout={handleLogout} userName={user.email.split('@')[0]} />
         <main className="flex-1 overflow-y-auto">
           {currentView === 'dashboard' && <DashboardPage />}
           {currentView === 'employees' && <EmployeesPage />}
           {currentView === 'departments' && <DepartmentsPage />}
-          {currentView === 'users' && <UsersRolesPage />}
-          {currentView === 'profile' && <ProfilePage />}
+
         </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

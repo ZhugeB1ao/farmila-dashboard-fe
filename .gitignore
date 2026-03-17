@@ -20,11 +20,6 @@ build/
 *.swp
 *.swo
 
-# Agent / AI skill folders
-.agent/
-.agents/
-.gemini/
-
 # OS files
 .DS_Store
 Thumbs.db
@@ -41,3 +36,4 @@ coverage/
 .cache/
 .eslintcache
 *.tsbuildinfo
+.gitnexus

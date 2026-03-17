@@ -20,14 +20,7 @@ export function TopNav({ onLogout, userName }: TopNavProps) {
   return (
     <div className="h-16 bg-card border-b border-border flex items-center justify-between px-6">
       <div className="flex items-center gap-4 flex-1 max-w-xl">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search employees, departments..."
-            className="pl-9 bg-muted/50 border-border"
-          />
-        </div>
+        {/* Search input removed as requested */}
       </div>
 
       <div className="flex items-center gap-3">
@@ -51,12 +44,12 @@ export function TopNav({ onLogout, userName }: TopNavProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-            <DropdownMenuItem>Preferences</DropdownMenuItem>
+            <DropdownMenuItem>Cài đặt hồ sơ</DropdownMenuItem>
+            <DropdownMenuItem>Tùy chọn</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogout}>Log out</DropdownMenuItem>
+            <DropdownMenuItem onClick={onLogout}>Đăng xuất</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

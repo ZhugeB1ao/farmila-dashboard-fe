@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Toaster } from '../components/ui/sonner';
 import { toast } from 'sonner';
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react';
-import { fetchEmployees, deleteEmployee as deleteEmployeeApi, fetchEmployeeWithContract, createEmployee, updateEmployee, Employee, Contract } from '../services/employeeService';
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Filter } from 'lucide-react';
+import { useEmployee, Employee } from '../hooks/useEmployee';
+import { useContract, Contract } from '../hooks/useContract';
+import { useDepartment } from '../hooks/useDepartment';
+
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import {
   Table,
+
   TableBody,
   TableCell,
   TableHead,
@@ -30,63 +35,67 @@ import {
 import { EmployeeDetailModal } from '../components/EmployeeDetailModal';
 
 export function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { employees, loading: isLoading, createEmployee, updateEmployee, deleteEmployee } = useEmployee();
+  const { createContract, updateContract } = useContract();
+  const { departments } = useDepartment();
+  
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedGender, setSelectedGender] = useState<string>('all');
+  
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'add'>('view');
 
-  // Fetch employees from API on component mount
-  useEffect(() => {
-    const loadEmployees = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await fetchEmployees();
-        setEmployees(data);
-      } catch (err) {
-        setError('Failed to load employees. Please try again later.');
-        console.error('Error loading employees:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
-    loadEmployees();
-  }, []);
+  const filteredEmployees = useMemo(() => {
+    return (employees || []).filter(emp => {
+      const matchesSearch = (emp.firstName + ' ' + emp.lastName).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.departmentName.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesDept = selectedDeptId === 'all' || emp.departmentId === selectedDeptId;
+      const matchesStatus = selectedStatus === 'all' || emp.status === selectedStatus;
+      const matchesGender = selectedGender === 'all' || emp.gender === selectedGender;
+      
+      return matchesSearch && matchesDept && matchesStatus && matchesGender;
+    });
+  }, [employees, searchQuery, selectedDeptId, selectedStatus, selectedGender]);
 
-  const filteredEmployees = employees.filter(emp =>
-    emp.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (emp.bankAccount && emp.bankAccount.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handleSaveEmployee = async (employee: Employee, imageFile?: File) => {
+  const handleSaveEmployee = async (employee: Employee, contract: Partial<Contract> | null, imageFile?: File) => {
     try {
+      setIsSaving(true);
       if (modalMode === 'add') {
         const newEmployee = await createEmployee(employee, imageFile);
-        setEmployees([...employees, newEmployee]);
-        toast.success('Employee created successfully');
+        if (newEmployee && contract) {
+          await createContract({ ...contract, employeeId: newEmployee.id });
+        }
+        toast.success('Thêm nhân viên và hợp đồng thành công');
       } else {
-        // Edit existing employee
-        const updatedEmployee = await updateEmployee(employee.id, employee, imageFile);
-        setEmployees(employees.map(emp =>
-          emp.id === employee.id ? updatedEmployee : emp
-        ));
-        toast.success('Employee updated successfully');
+        await updateEmployee(employee.id, employee, imageFile);
+        if (contract) {
+          if (contract.id) {
+            await updateContract(contract.id, contract);
+          } else {
+            await createContract({ ...contract, employeeId: employee.id });
+          }
+        }
+        toast.success('Cập nhật nhân viên và hợp đồng thành công');
       }
       setIsDetailModalOpen(false);
       setSelectedEmployee(null);
     } catch (err) {
-      console.error('Error saving employee:', err);
-      toast.error('Failed to save employee. Please try again.');
-      // Do NOT close the modal on error
+      console.error('Error saving employee or contract:', err);
+      toast.error('Lưu nhân viên và hợp đồng thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -94,42 +103,25 @@ export function EmployeesPage() {
     if (!selectedEmployee) return;
     
     try {
-      await deleteEmployeeApi(selectedEmployee.id);
-      setEmployees(employees.filter(emp => emp.id !== selectedEmployee.id));
+      await deleteEmployee(selectedEmployee.id);
+      toast.success('Xóa nhân viên thành công');
     } catch (err) {
       console.error('Error deleting employee:', err);
-      // Still remove from UI for now, you can add error handling here
-      setEmployees(employees.filter(emp => emp.id !== selectedEmployee.id));
+      toast.error('Xóa nhân viên thất bại.');
     }
     setIsDeleteDialogOpen(false);
     setSelectedEmployee(null);
   };
 
-  const openAddModal = () => {
-    setSelectedEmployee(null);
-    setSelectedContract(null);
-    setModalMode('add');
-    setIsDetailModalOpen(true);
-  };
-
-  const openViewModal = async (employee: Employee) => {
+  const handleViewDetails = async (employee: Employee) => {
     setIsLoadingDetail(true);
     setModalMode('view');
     setIsDetailModalOpen(true);
-    
-    try {
-      // Call both APIs in parallel
-      const { employee: fullEmployee, contract } = await fetchEmployeeWithContract(employee.id);
-      setSelectedEmployee(fullEmployee);
-      setSelectedContract(contract);
-    } catch (err) {
-      console.error('Error fetching employee details:', err);
-      // Fallback to basic employee data if API fails
-      setSelectedEmployee(employee);
-      setSelectedContract(null);
-    } finally {
-      setIsLoadingDetail(false);
-    }
+    setSelectedEmployee(employee);
+    // Note: fetchEmployeeWithContract is currently missing from Supabase implementation,
+    // assuming it will be added to useEmployee or we just use employee data for now.
+
+    setIsLoadingDetail(false);
   };
 
   const openDeleteDialog = (employee: Employee) => {
@@ -137,103 +129,154 @@ export function EmployeesPage() {
     setIsDeleteDialogOpen(true);
   };
 
+  const openAddModal = () => {
+    setSelectedEmployee(null);
+
+    setModalMode('add');
+    setIsDetailModalOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1>Employees</h1>
+          <h1 className="text-2xl font-bold">Nhân viên</h1>
           <p className="text-muted-foreground">
-            Manage your organization's employees
+            Quản lý nhân viên trong tổ chức của bạn
           </p>
         </div>
         <Button onClick={openAddModal}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Employee
+          <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+          Thêm nhân viên
         </Button>
       </div>
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Search employees..."
+            placeholder="Tìm kiếm tên nhân viên…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 bg-card"
+            autoComplete="off"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            value={selectedDeptId}
+            onChange={(e) => setSelectedDeptId(e.target.value)}
+            className="flex h-9 w-[200px] rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">Tất cả phòng ban</option>
+            {departments?.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="flex h-9 w-[160px] rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="Active">Đang làm việc</option>
+            <option value="Inactive">Nghỉ việc</option>
+            <option value="On Leave">Đang nghỉ phép</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            value={selectedGender}
+            onChange={(e) => setSelectedGender(e.target.value)}
+            className="flex h-9 w-[140px] rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">Tất cả giới tính</option>
+            <option value="Male">Nam</option>
+            <option value="Female">Nữ</option>
+            <option value="Other">Khác</option>
+          </select>
         </div>
       </div>
 
       {/* Loading State */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreground">Loading employees...</span>
-        </div>
-      ) : null}
-
-      {/* Error State */}
-      {error && !isLoading ? (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-          {error}
+          <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+          <span className="ml-2 text-muted-foreground">Đang tải danh sách nhân viên…</span>
         </div>
       ) : null}
 
       {/* Employee Table */}
-      {!isLoading && !error ? (
+      {!isLoading && (
       <div className="bg-card rounded-lg border border-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Full Name</TableHead>
-              <TableHead>Gender</TableHead>
-              <TableHead>Birthday</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Bank Account</TableHead>
-              <TableHead>SIN</TableHead>
-              <TableHead>PTIN</TableHead>
+              <TableHead>Số hợp đồng</TableHead>
+              <TableHead>Họ và tên</TableHead>
+              <TableHead>Giới tính</TableHead>
+              <TableHead>Ngày sinh</TableHead>
+              <TableHead>Phòng ban</TableHead>
+              <TableHead>Tài khoản ngân hàng</TableHead>
+              <TableHead>Mã số bảo hiểm</TableHead>
+              <TableHead>Mã số thuế</TableHead>
               <TableHead className="w-[70px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredEmployees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No employees found
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  Không tìm thấy nhân viên nào
                 </TableCell>
               </TableRow>
             ) : (
               filteredEmployees.map((employee) => (
                 <TableRow key={employee.id}>
-                  <TableCell>{employee.id}</TableCell>
+                  <TableCell>{employee.contractNo}</TableCell>
                   <TableCell>
-                    <p className="font-medium">{employee.fullName}</p>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                         <AvatarImage src={employee.avatar} />
+                         <AvatarFallback>{employee.firstName[0]}</AvatarFallback>
+                      </Avatar>
+                      <p className="font-medium">{employee.firstName} {employee.lastName}</p>
+                    </div>
                   </TableCell>
-                  <TableCell>{employee.gender}</TableCell>
-                  <TableCell>{new Date(employee.birthday).toLocaleDateString()}</TableCell>
-                  <TableCell>{employee.department}</TableCell>
+                  <TableCell>{employee.gender === 'Male' ? 'Nam' : employee.gender === 'Female' ? 'Nữ' : 'Khác'}</TableCell>
+                  <TableCell>{employee.birthday ? new Date(employee.birthday).toLocaleDateString('vi-VN') : ''}</TableCell>
+                  <TableCell>{employee.departmentName}</TableCell>
                   <TableCell>{employee.bankAccount}</TableCell>
                   <TableCell>{employee.sin}</TableCell>
                   <TableCell>{employee.ptin}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" aria-label="Employee actions">
+                          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openViewModal(employee)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
+                        <DropdownMenuItem onClick={() => handleViewDetails(employee)}>
+                          <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
+                          Xem chi tiết
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => openDeleteDialog(employee)}
-                          className="text-destructive"
+                          className="text-destructive font-medium"
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
+                          <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                          Xóa
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -244,23 +287,23 @@ export function EmployeesPage() {
           </TableBody>
         </Table>
       </div>
-      ) : null}
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Employee</DialogTitle>
+            <DialogTitle>Xóa nhân viên</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete {selectedEmployee?.fullName}? This action cannot be undone.
+              Bạn có chắc chắn muốn xóa {selectedEmployee?.firstName} {selectedEmployee?.lastName}? Hành động này không thể hoàn tác.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
+              Hủy
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              Delete
+              Xóa
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -271,8 +314,8 @@ export function EmployeesPage() {
         open={isDetailModalOpen}
         onOpenChange={setIsDetailModalOpen}
         employee={selectedEmployee}
-        contract={selectedContract}
-        isLoading={isLoadingDetail}
+
+        isLoading={isLoadingDetail || isSaving}
         onSave={handleSaveEmployee}
         mode={modalMode}
       />
